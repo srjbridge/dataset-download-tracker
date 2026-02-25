@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dataset Download Tracker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Dataset Download Tracker</h1>
+        <p>Tracking monthly downloads for Canada's datasets</p>
+        
+        <div class="controls">
+            <button id="refreshBtn" onclick="refreshData()">Refresh Data Now</button>
+            <button id="exportBtn" onclick="exportData()">Export to CSV</button>
+            <div id="status"></div>
+        </div>
+        
+        <div class="tabs">
+            <button class="tab-button active" onclick="showTab('dashboard')">Dashboard</button>
+            <button class="tab-button" onclick="showTab('cpcad')">CPCAD</button>
+            <button class="tab-button" onclick="showTab('critical-habitat')">Critical Habitat</button>
+            <button class="tab-button" onclick="showTab('cnwi')">CNWI</button>
+        </div>
+        
+        <div id="dashboard" class="tab-content active">
+            <h2>Monthly Download Trends</h2>
+            <canvas id="chart"></canvas>
+            <table id="dataTable" class="data-table">
+                <thead>
+                    <tr><th>Month/Year</th><th>CPCAD</th><th>Critical Habitat</th><th>CNWI</th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        
+        <div id="cpcad" class="tab-content"></div>
+        <div id="critical-habitat" class="tab-content"></div>
+        <div id="cnwi" class="tab-content"></div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        let allData = {};
+        let chart = null;
+        
+        async function loadData() {
+            try {
+                const response = await fetch('/api/data');
+                allData = await response.json();
+                renderDashboard();
+            } catch (e) {
+                document.getElementById('status').textContent = 'Error loading data: ' + e;
+            }
+        }
+        
+        function renderDashboard() {
+            const months = new Set();
+            Object.values(allData).forEach(d => {
+                d.months.forEach(m => months.add(m.year + '-' + String(m.month).padStart(2, '0')));
+            });
+            const sortedMonths = Array.from(months).sort();
+            
+            const tbody = document.querySelector('#dataTable tbody');
+            tbody.innerHTML = '';
+            sortedMonths.forEach(ym => {
+                const [year, month] = ym.split('-');
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${month}/${year}</td>
+                    <td>${getDownloads(allData['6c343726-1e92-451a-876a-76e17d398a1c'], year, month)}</td>
+                    <td>${getDownloads(allData['47caa405-be2b-4e9e-8f53-c478ade2ca74'], year, month)}</td>
+                    <td>${getDownloads(allData['d5af4ac5-ebdb-4645-bb0a-8ec5cac5e29f'], year, month)}</td>
+                `;
+                tbody.appendChild(row);
+            });
+            
+            renderChart(sortedMonths);
+        }
+        
+        function getDownloads(data, year, month) {
+            if (!data) return 'N/A';
+            const entry = data.months.find(m => m.year == year && m.month == month);
+            return entry ? (entry.downloads || entry.status) : 'No data';
+        }
+        
+        function renderChart(months) {
+            const ctx = document.getElementById('chart').getContext('2d');
+            const cpcadData = months.map(ym => getChartValue(allData['6c343726-1e92-451a-876a-76e17d398a1c'], ym));
+            const chData = months.map(ym => getChartValue(allData['47caa405-be2b-4e9e-8f53-c478ade2ca74'], ym));
+            const cnwiData = months.map(ym => getChartValue(allData['d5af4ac5-ebdb-4645-bb0a-8ec5cac5e29f'], ym));
+            
+            if (chart) chart.destroy();
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: months,
+                    datasets: [
+                        {label: 'CPCAD', data: cpcadData, borderColor: '#e74c3c', backgroundColor: 'rgba(231,76,60,0.1)'},
+                        {label: 'Critical Habitat', data: chData, borderColor: '#3498db', backgroundColor: 'rgba(52,152,219,0.1)'},
+                        {label: 'CNWI', data: cnwiData, borderColor: '#2ecc71', backgroundColor: 'rgba(46,204,113,0.1)'}
+                    ]
+                },
+                options: {responsive: true, plugins: {legend: {position: 'top'}}, scales: {y: {beginAtZero: true}}}
+            });
+        }
+        
+        function getChartValue(data, ym) {
+            if (!data) return null;
+            const [year, month] = ym.split('-');
+            const entry = data.months.find(m => m.year == year && m.month == month);
+            return entry ? (entry.downloads || null) : null;
+        }
+        
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            event.target.classList.add('active');
+        }
+        
+        async function refreshData() {
+            const btn = document.getElementById('refreshBtn');
+            btn.disabled = true;
+            btn.textContent = 'Refreshing...';
+            try {
+                const response = await fetch('/api/refresh', {method: 'POST'});
+                const result = await response.json();
+                document.getElementById('status').textContent = result.message || 'Refreshed';
+                loadData();
+            } catch (e) {
+                document.getElementById('status').textContent = 'Error: ' + e;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Refresh Data Now';
+            }
+        }
+        
+        function exportData() {
+            window.location.href = '/api/export';
+        }
+        
+        loadData();
+    </script>
+</body>
+</html>
