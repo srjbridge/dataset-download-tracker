@@ -60,7 +60,7 @@ def get_data():
     
     data = {}
     for uuid, name in TRACKED_DATASETS.items():
-        c.execute('SELECT year, month, downloads, status FROM monthly_downloads WHERE dataset_uuid = ? ORDER BY year, month', (uuid,))
+        c.execute('SELECT year, month, , status FROM monthly_ WHERE dataset_uuid = ? ORDER BY year, month', (uuid,))
         rows = c.fetchall()
         data[uuid] = {
             'name': name,
@@ -79,7 +79,7 @@ def get_dataset(uuid):
     conn = get_db()
     c = conn.cursor()
     
-    c.execute('SELECT year, month, downloads, status FROM monthly_downloads WHERE dataset_uuid = ? ORDER BY year, month', (uuid,))
+    c.execute('SELECT year, month, , status FROM monthly_ WHERE dataset_uuid = ? ORDER BY year, month', (uuid,))
     months = [dict(row) for row in c.fetchall()]
     
     c.execute('SELECT text, created_at, author FROM notes WHERE dataset_uuid = ? ORDER BY created_at DESC', (uuid,))
@@ -135,9 +135,9 @@ def refresh_data():
                 continue
             
             try:
-                downloads = int(row.get('downloads', 0))
-                month = int(row.get('month', 0))
-                year = int(row.get('year', 0))
+                downloads = int(row.get('downloads_telechargements', 0))
+                month = int(row.get('month_mois', 0))
+                year = int(row.get('year_annee', 0))
                 
                 if month > 0 and year > 0:
                     c.execute('''INSERT OR REPLACE INTO monthly_downloads 
